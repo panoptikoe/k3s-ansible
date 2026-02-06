@@ -13,6 +13,11 @@
   ansible.builtin.include_tasks: metallb.yml
   tags: metallb
   when: kube_vip_lb_ip_range is not defined and (not cilium_bgp or cilium_iface is not defined)
+  
+- name: Deploy longhorn
+  ansible.builtin.include_tasks: longhorn.yml
+  tags: longhorn
+  when: longhorn_enabled | default('no') | lower == "yes"
 
 - name: Remove tmp directory used for manifests
   ansible.builtin.file:
