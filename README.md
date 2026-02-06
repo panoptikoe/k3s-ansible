@@ -1,13 +1,3 @@
-# About this fork
-
-See [this issue](https://github.com/timothystewart6/k3s-ansible/issues/667) for where this comes from. This updates a few versions:
-- k3s to v1.34.2+k3s1
-- Calico to v3.31.0
-- Cilium to v1.18.5
-- All playbooks have been modified to reflect this and are working.
-
-See the [readme](https://github.com/timothystewart6/k3s-ansible/blob/master/README.md) in the original repo for more information.
-
 # About this branch
 With this, you get the extra option to deploy Longhorn. You can specify a version of Longhorn and it will deploy it in your cluster using kubectl. First, it will check if your nodes have all the required things in place. 
 I've only tested this with nodes running Ubuntu 24.04 for now, on x86_64.
