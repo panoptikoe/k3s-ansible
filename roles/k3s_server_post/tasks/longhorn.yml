@@ -1,0 +1,139 @@
+---
+# Longhorn deploy (optional) using kubectl apply
+# Required vars (in inventory/.../group_vars/all.yml):
+#   longhorn_enabled: "yes"|"no"
+#   longhorn_version: "v1.11.0" (you can obviously use other versions, but be sure to check compatibility first at https://longhorn.io/docs/1.11.0/deploy/install/#installation-requirements)
+
+# Uses repo vars:
+#   group_name_master (defaults to "master")
+#   k3s_kubectl_binary (optional; defaults to "k3s kubectl")
+#   retry_count (optional; defaults to 20)
+
+- name: Longhorn | Set defaults
+  ansible.builtin.set_fact:
+    longhorn_data_path: "{{ longhorn_data_path | default('/var/lib/longhorn') }}"
+  run_once: true
+
+- name: Longhorn | Validate required variables
+  ansible.builtin.assert:
+    that:
+      - longhorn_version is defined
+      - (longhorn_version | string | length) > 0
+    fail_msg: >-
+      longhorn_version must be set to a valid version (e.g. "v1.11.0") when longhorn_enabled is "yes".
+  when: longhorn_enabled | default('no') | lower == "yes"
+  run_once: true
+
+- name: Longhorn | Build node lists from inventory (masters + workers)
+  ansible.builtin.set_fact:
+    _lh_masters: "{{ groups.get(group_name_master | default('master'), []) }}"
+    _lh_nodes: "{{ (groups.get(group_name_master | default('master'), []) + groups.get('node', [])) | unique }}"
+  run_once: true
+
+- name: Longhorn | Fail if no master host found
+  ansible.builtin.fail:
+    msg: >-
+      Could not find any hosts in masters group '{{ group_name_master | default("master") }}'.
+      Check your inventory groups! (you can find this file in inventory/my-cluster/hosts.ini)
+  when:
+    - longhorn_enabled | default('no') | lower == "yes"
+    - _lh_masters | length == 0
+  run_once: true
+
+# -------------------------
+# Node prerequisites (this runs on all nodes!)
+# Important: run_once prevents multiple masters from running apt concurrently on the same node.
+# -------------------------
+- name: Longhorn | Preflight + install node prerequisites on all nodes
+  when: longhorn_enabled | default('no') | lower == "yes"
+  run_once: true
+  block:
+
+    - name: Longhorn | Ensure data path exists (for filesystem check)
+      ansible.builtin.file:
+        path: "{{ longhorn_data_path }}"
+        state: directory
+        mode: "0755"
+      become: true
+      delegate_to: "{{ item }}"
+      loop: "{{ _lh_nodes }}"
+
+    - name: Longhorn | Ensure prerequisite packages are installed (Ubuntu/Debian)
+      ansible.builtin.apt:
+        name:
+          - open-iscsi
+          - nfs-common
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      become: true
+      delegate_to: "{{ item }}"
+      loop: "{{ _lh_nodes }}"
+      register: _lh_apt
+      # Handle apt-daily / unattended-upgrades locks gracefully, otherwise it gets locked
+      retries: 18
+      delay: 10
+      until: _lh_apt is succeeded
+
+    - name: Longhorn | Ensure iscsid enabled and running
+      ansible.builtin.service:
+        name: iscsid
+        state: started
+        enabled: true
+      become: true
+      delegate_to: "{{ item }}"
+      loop: "{{ _lh_nodes }}"
+
+    - name: Longhorn | Check filesystem type for Longhorn data path
+      ansible.builtin.command: "findmnt -n -o FSTYPE --target {{ longhorn_data_path }}"
+      register: _lh_fstype
+      changed_when: false
+      become: true
+      delegate_to: "{{ item }}"
+      loop: "{{ _lh_nodes }}"
+
+    - name: Longhorn | Fail if filesystem unsupported (must be ext4 or xfs)
+      ansible.builtin.assert:
+        that:
+          - (item.stdout | default('') | trim) in ['ext4', 'xfs']
+        fail_msg: >-
+          Longhorn data path {{ longhorn_data_path }} on {{ item.item }} is on filesystem
+          '{{ item.stdout | default('') | trim }}'. Longhorn expects ext4 or xfs.
+      delegate_to: localhost
+      loop: "{{ _lh_fstype.results }}"
+
+# -------------------------
+# Deploy Longhorn (RUN ONCE on first master) using k3s kubectl
+# -------------------------
+- name: Longhorn | Deploy Longhorn via kubectl apply (run on first master)
+  when: longhorn_enabled | default('no') | lower == "yes"
+  run_once: true
+  block:
+
+    - name: Longhorn | Wait for API to report all control-plane nodes
+      ansible.builtin.command:
+        cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} get nodes -l 'node-role.kubernetes.io/control-plane=true' -o=jsonpath='{.items[*].metadata.name}'"
+      register: _lh_cp_nodes
+      until: _lh_cp_nodes.rc == 0 and (_lh_cp_nodes.stdout.split() | length) == (_lh_masters | length)
+      retries: "{{ retry_count | default(20) }}"
+      delay: 10
+      changed_when: false
+      delegate_to: "{{ _lh_masters[0] }}"
+
+    - name: Longhorn | Apply Longhorn manifests (version-pinned)
+      ansible.builtin.command:
+        cmd: >-
+          {{ k3s_kubectl_binary | default('k3s kubectl') }}
+          apply -f https://raw.githubusercontent.com/longhorn/longhorn/{{ longhorn_version }}/deploy/longhorn.yaml
+      register: _lh_apply
+      changed_when: true
+      delegate_to: "{{ _lh_masters[0] }}"
+
+    - name: Longhorn | Wait for Longhorn deployments to become ready
+      ansible.builtin.command:
+        cmd: >-
+          {{ k3s_kubectl_binary | default('k3s kubectl') }}
+          -n longhorn-system rollout status deployment --timeout=10m
+      register: _lh_rollout
+      changed_when: false
+      delegate_to: "{{ _lh_masters[0] }}"
