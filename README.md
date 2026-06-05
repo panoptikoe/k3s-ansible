@@ -5,7 +5,7 @@ See [this issue](https://github.com/timothystewart6/k3s-ansible/issues/667) for 
 - Calico to v3.31.0
 - Cilium to v1.18.5 (also tested with 1.19.0)
 - All playbooks have been modified to reflect this and are working.
-- Small disclaimer: the original playbook was tested for Debian, Ubuntu and Rocky. I only tested all of this on Ubuntu 24.04. Your mileage may vary with Debian or Rocky!
+- Small disclaimer: the original playbook was tested for Debian, Ubuntu and Rocky. I use Ubuntu 24.04 / 26.04 usually, but it works with Rocky 10, Alma 10 and Debian 13.
 
 See the [readme](https://github.com/timothystewart6/k3s-ansible/blob/master/README.md) in the original repo for more information.
 
