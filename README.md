@@ -1,7 +1,7 @@
 # About this fork
 
 See [this issue](https://github.com/timothystewart6/k3s-ansible/issues/667) for where this comes from. This updates a few versions:
-- k3s to v1.34.2+k3s1 (also tested with v1.35.0+k3s1)
+- k3s to v1.34.2+k3s1 (also tested with v1.35.0+k3s1 and v1.36.0+k3s1)
 - Calico to v3.31.0
 - Cilium to v1.18.5 (also tested with 1.19.0)
 - All playbooks have been modified to reflect this and are working.
