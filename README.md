@@ -2,8 +2,8 @@
 
 See [this issue](https://github.com/timothystewart6/k3s-ansible/issues/667) for where this comes from. This updates a few versions:
 - k3s to v1.34.2+k3s1 (also tested with v1.35.0+k3s1 and v1.36.0+k3s1)
-- Calico to v3.31.0
-- Cilium to v1.18.5 (also tested with 1.19.0)
+- Calico to v3.31.0 (also tested with v3.32.0)
+- Cilium to v1.18.5 (also tested with v1.19.0 and v1.19.4)
 - All playbooks have been modified to reflect this and are working.
 - Small disclaimer: the original playbook was tested for Debian, Ubuntu and Rocky. I use Ubuntu 24.04 / 26.04 usually, but it works with Rocky 10, Alma 10 and Debian 13. If you're using (minimal) cloud-init style images for Rocky 10 and Alma 10 you'll need to install extra kernel modules; you can do so by running `sudo dnf install -y kernel-modules kernel-modules-extra` followed by `sudo reboot` and `sudo modprobe br_netfilter` before running the whole playbook. More about that can be found on [this page](https://forums.rockylinux.org/t/docker-installation-failed-on-rhel-10/20024).
 
